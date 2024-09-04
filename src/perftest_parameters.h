@@ -350,6 +350,34 @@ enum ctx_report_fmt { GBS, MBS };
 /* Test method */
 enum ctx_test_method {RUN_REGULAR, RUN_ALL, RUN_INFINITELY};
 
+enum DsaType {
+	DSA_TYPE_INT32_ADD = 0,
+	DSA_TYPE_INT32_MAX = 1,
+	DSA_TYPE_INT32_MIN = 2,
+
+	DSA_TYPE_UINT32_ADD = 3,
+	DSA_TYPE_UINT32_MAX = 4,
+	DSA_TYPE_UINT32_MIN = 5,
+
+	DSA_TYPE_FLOAT32_ADD = 6,
+	DSA_TYPE_FLOAT32_MAX = 7,
+	DSA_TYPE_FLOAT32_MIN = 8,
+
+	DSA_TYPE_INT64_ADD = 9,
+	DSA_TYPE_INT64_MAX = 10,
+	DSA_TYPE_INT64_MIN = 11,
+
+	DSA_TYPE_UINT64_ADD = 12,
+	DSA_TYPE_UINT64_MAX = 13,
+	DSA_TYPE_UINT64_MIN = 14,
+
+	DSA_TYPE_FLOAT64_ADD = 15,
+	DSA_TYPE_FLOAT64_MAX = 16,
+	DSA_TYPE_FLOAT64_MIN = 17,
+
+	DSA_TYPE_END = 18
+};
+
 /* The type of the device */
 enum ctx_device {
 	DEVICE_ERROR		= -1,
@@ -528,6 +556,8 @@ struct perftest_parameters {
 	int 				use_srq;
 	int 				no_lock;
 	int 				congest_type;
+	int				use_nic_dsa;
+	int				dsa_type;
 	int				use_xrc;
 	int				use_rss;
 	int				srq_exists;

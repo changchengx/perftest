@@ -39,6 +39,15 @@ static const char *atomicTypesStr[] = {"CMP_AND_SWAP","FETCH_AND_ADD"};
 static const char *congestStr[] = {"DCQCN","LDCP","HC3","DIP"};
 #endif
 
+static const char *dsaTypeStr[] = {
+	"INT32_ADD",   "INT32_MAX",   "INT32_MIN",
+	"UINT32_ADD",  "UINT32_MAX",  "UINT32_MIN",
+	"FLOAT32_ADD", "FLOAT32_MAX", "FLOAT32_MIN",
+	"INT64_ADD",   "INT64_MAX",   "INT64_MIN",
+	"UINT64_ADD",  "UINT64_MAX",  "UINT64_MIN",
+	"FLOAT64_ADD", "FLOAT64_MAX", "FLOAT64_MIN"
+};
+
 /******************************************************************************
  * parse_mac_from_str.
  *
@@ -652,6 +661,10 @@ static void usage(const char *argv0, VerbType verb, TestType tst, int connection
 		printf("      --unsolicited_write ");
 		printf(" Use unsolicited receive for write-with-immediate\n");
 		#endif
+
+		printf("      --dsa_type=TYPE_OP \n");
+		printf(" supported TYPE: INT32/UINT32/FLOAT32/INT64/UINT64/FLOAT64 \n");
+		printf(" supported OP:   ADD/MAX/MIN \n");
 	}
 
 	putchar('\n');
@@ -893,6 +906,8 @@ static void init_perftest_params(struct perftest_parameters *user_param)
 	user_param->use_unsolicited_write = 0;
 	user_param->congest_type	= OFF;
 	user_param->no_lock		= OFF;
+	user_param->use_nic_dsa		= OFF;
+	user_param->dsa_type		= DSA_TYPE_END;
 }
 
 static int open_file_write(const char* file_path)
@@ -1009,6 +1024,23 @@ static void set_congest_type(int *cgtr, const char *optarg)
 	}
 }
 #endif
+
+static void set_dsa_type(int *dsa_type, const char *optarg) {
+	int i = 0;
+
+	for (i = 0; i < DSA_TYPE_END; i++) {
+		const char* dsatype = dsaTypeStr[i];
+		if (dsatype && strcmp(dsatype, optarg) == 0) {
+			*dsa_type = i;
+			break;
+		}
+	}
+
+	if (i == DSA_TYPE_END) {
+		fprintf(stderr, " Invalid dsa type\n");
+		exit(1);
+	}
+}
 
 /******************************************************************************
  *
@@ -1175,6 +1207,26 @@ static void force_dependecies(struct perftest_parameters *user_param)
 		printf(RESULT_LINE);
 		printf(" Using SRQ only avavilible in SEND tests.\n");
 		exit (1);
+	}
+
+	if (user_param->use_nic_dsa) {
+		if (user_param->inline_size) {
+			printf(RESULT_LINE);
+			printf(" use_nic_dsa(Vector-Calc) not work with inline message data.\n");
+			exit(1);
+		}
+
+		if (user_param->dsa_type <= DSA_TYPE_FLOAT32_MIN) {
+			if (user_param->size % 4) {
+				printf(RESULT_LINE);
+				printf(" Invalid, dsa_type:%s, size=%ld, need 4 align\n", dsaTypeStr[user_param->dsa_type], user_param->size);
+				exit(1);
+			}
+		} else if (user_param->size % 8) {
+				printf(RESULT_LINE);
+				printf(" Invalid, dsa_type:%s, size=%ld, need 4 align\n", dsaTypeStr[user_param->dsa_type], user_param->size);
+				exit(1);
+		}
 	}
 
 	/* XRC Part */
@@ -2208,6 +2260,12 @@ static void ctx_set_max_inline(struct ibv_context *context,struct perftest_param
 			return;
 		}
 
+		if (user_param->use_nic_dsa) {
+			user_param->inline_size = 0;
+			printf("Perftest doesn't supports DSA(Vector-Calc) tests with inline messages: inline size set to 0\n");
+			return;
+		}
+
 		if (user_param->tst == LAT) {
 			switch(user_param->verb) {
 				case WRITE_IMM:
@@ -2369,6 +2427,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 	static int no_lock_flag = 0;
 	#endif
 	static int use_max_size_flag = 0;
+	static int use_nic_dsa_flag = 0;
 
 	char *server_ip = NULL;
 	char *client_ip = NULL;
@@ -2535,6 +2594,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 			{.name = "unsolicited_write", .has_arg = 0, .flag = &unsolicited_write_flag, .val = 1 },
 			#endif
 			{.name = "max_size", .has_arg = 1, .flag = &use_max_size_flag, .val = 1 },
+			{.name = "dsa_type", .has_arg = 1, .flag = &use_nic_dsa_flag, .val = 1 },
 			{0}
 		};
 		if (!duplicates_checker) {
@@ -3201,6 +3261,16 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 					use_max_size_flag = 0;
 				}
 
+				if (use_nic_dsa_flag) {
+					if (user_param->tst == BW && user_param->verb == WRITE) {
+						set_dsa_type(&user_param->dsa_type, optarg);
+						user_param->use_nic_dsa = 1;
+						use_nic_dsa_flag = 0;
+					} else {
+						fprintf(stderr, "nic_dsa can only be used with write_bw tests\n");
+						return FAILURE;
+					}
+				}
 				break;
 			default:
 				  fprintf(stderr," Invalid Command or flag.\n");
@@ -3541,6 +3611,10 @@ void ctx_print_test_info(struct perftest_parameters *user_param)
 	printf(RESULT_LINE);
 	printf("                    ");
 	printf("%s ",testsStr[user_param->verb]);
+
+	if (user_param->use_nic_dsa) {
+		printf(" with DSA_TYPE %s ", dsaTypeStr[user_param->dsa_type]);
+	}
 
 	if (user_param->verb == ATOMIC) {
 		printf("%s ",atomicTypesStr[user_param->atomicType]);
