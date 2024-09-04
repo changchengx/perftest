@@ -85,7 +85,7 @@
 #define VERSION_EXIT (10)
 #define HELP_EXIT	 (11)
 #define MTU_FIX	     (7)
-#define MAX_SIZE     (8388608)
+#define MAX_SIZE     (1 << 23)
 #define LINK_FAILURE (-1)
 #define LINK_UNSPEC (-2)
 #define MAX_OUT_READ_HERMON (16)
@@ -455,6 +455,7 @@ struct perftest_parameters {
 	int				mtu;
 	enum ibv_mtu			curr_mtu;
 	uint64_t			size;
+	int				max_size;
 	int				req_size;
 	uint64_t			dct_key;
 	uint64_t			iters;

@@ -299,7 +299,8 @@ int main(int argc, char *argv[])
 	ctx_set_send_wqes(&ctx,&user_param,rem_dest);
 
 	if (user_param.test_method == RUN_ALL) {
-		for (i = 1; i < 24 ; ++i) {
+		int size_max_power = MSG_SZ_2_EXP(user_param.size) + 1;
+		for (i = 1; i < size_max_power; ++i) {
 			user_param.size = (uint64_t)1 << i;
 			if(run_iter_lat(&ctx,&user_param)) {
 				error = 17;

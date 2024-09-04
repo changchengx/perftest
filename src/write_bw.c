@@ -293,8 +293,8 @@ int main(int argc, char *argv[])
 	}
 
 	if (user_param.test_method == RUN_ALL) {
-
-		for (i = 1; i < 24 ; ++i) {
+		int size_max_power = MSG_SZ_2_EXP(user_param.size) + 1;
+		for (i = 1; i < size_max_power; ++i) {
 
 			user_param.size = (uint64_t)1 << i;
 

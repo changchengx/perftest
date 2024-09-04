@@ -228,6 +228,7 @@ static void usage(const char *argv0, VerbType verb, TestType tst, int connection
 	if (verb != ATOMIC && connection_type != RawEth) {
 		printf("  -a, --all ");
 		printf(" Run sizes from 2 till 2^23\n");
+		printf("     limit the max size with --max_size configuration, should be <= 2^23\n");
 	}
 
 	if (verb == ATOMIC) {
@@ -758,6 +759,7 @@ static void init_perftest_params(struct perftest_parameters *user_param)
 	user_param->link_type		= LINK_UNSPEC;
 	user_param->link_type2		= LINK_UNSPEC;
 	user_param->size		= (user_param->tst == BW ) ? DEF_SIZE_BW : DEF_SIZE_LAT;
+	user_param->max_size		= 0;
 	user_param->tx_depth		= (user_param->tst == BW || user_param->tst == LAT_BY_BW ) ? DEF_TX_BW : DEF_TX_LAT;
 	user_param->qp_timeout		= DEF_QP_TIME;
 	user_param->test_method		= RUN_REGULAR;
@@ -1161,7 +1163,7 @@ static void force_dependecies(struct perftest_parameters *user_param)
 		user_param->inline_size = 0;
 
 	if (user_param->test_method == RUN_ALL)
-		user_param->size = MAX_SIZE;
+		user_param->size = user_param->max_size ? user_param->max_size : MAX_SIZE;
 
 	if (user_param->verb == ATOMIC && user_param->size != DEF_SIZE_ATOMIC) {
 		printf(RESULT_LINE);
@@ -2366,6 +2368,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 	#ifdef HAVE_TD_API
 	static int no_lock_flag = 0;
 	#endif
+	static int use_max_size_flag = 0;
 
 	char *server_ip = NULL;
 	char *client_ip = NULL;
@@ -2531,6 +2534,7 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 			#ifdef HAVE_SRD_WITH_UNSOLICITED_WRITE_RECV
 			{.name = "unsolicited_write", .has_arg = 0, .flag = &unsolicited_write_flag, .val = 1 },
 			#endif
+			{.name = "max_size", .has_arg = 1, .flag = &use_max_size_flag, .val = 1 },
 			{0}
 		};
 		if (!duplicates_checker) {
@@ -3177,6 +3181,26 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 					unsolicited_write_flag = 0;
 				}
 				#endif
+
+				if (use_max_size_flag) {
+					size_len = (int)strlen(optarg);
+					if (optarg[size_len-1] == 'K') {
+						optarg[size_len-1] = '\0';
+						size_factor = 1024;
+					}
+					if (optarg[size_len-1] == 'M') {
+						optarg[size_len-1] = '\0';
+						size_factor = 1024*1024;
+					}
+					user_param->max_size = (uint64_t)strtol(optarg, NULL, 0) * size_factor;
+					if (user_param->max_size < 1 || user_param->max_size > MAX_SIZE) {
+						fprintf(stderr, " max message size should be in [1, %d]\n", MAX_SIZE);
+						free(duplicates_checker);
+						return FAILURE;
+					}
+					use_max_size_flag = 0;
+				}
+
 				break;
 			default:
 				  fprintf(stderr," Invalid Command or flag.\n");
