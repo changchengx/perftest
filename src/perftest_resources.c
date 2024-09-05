@@ -1350,14 +1350,6 @@ int destroy_ctx(struct pingpong_context *ctx,
 		}
 	}
 
-	if (user_param->use_rdma_cm == OFF) {
-
-		if (ibv_close_device(ctx->context)) {
-			fprintf(stderr, "Failed to close device context\n");
-			test_result = 1;
-		}
-	}
-
 	for (i = 0; i < dereg_counter; i++) {
 		ctx->memory->free_buffer(ctx->memory, 0, ctx->buf[i], ctx->buff_size);
 	}
@@ -1403,6 +1395,13 @@ int destroy_ctx(struct pingpong_context *ctx,
 		free(ctx->rx_buffer_addr);
 		free(ctx->recv_sge_list);
 		free(ctx->rwr);
+	}
+
+	if (user_param->use_rdma_cm == OFF) {
+		if (ibv_close_device(ctx->context)) {
+			fprintf(stderr, "Failed to close device context\n");
+			test_result = 1;
+		}
 	}
 
 	if (user_param->work_rdma_cm == ON) {
