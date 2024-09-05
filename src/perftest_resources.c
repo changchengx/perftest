@@ -1797,9 +1797,61 @@ int create_single_mr(struct pingpong_context *ctx, struct perftest_parameters *u
 			}
 		}
 	}
+
+#ifdef HAVE_MLX5_DSA
+	if (user_param->use_nic_dsa) {
+extern int malloc_dsa_buf(struct pingpong_context *ctx, struct perftest_parameters *user_param, int qp_index, int can_init_mem);
+		if (malloc_dsa_buf(ctx, user_param, qp_index, can_init_mem)) {
+			fprintf(stderr, "Couldn't create dsa buf for dsa\n");
+			return FAILURE;
+		}
+
+extern int create_umr(struct pingpong_context *ctx, struct perftest_parameters *user_param, int qp_index);
+		if(create_umr(ctx, user_param, qp_index)) {
+			fprintf(stderr, "Couldn't register umr buf\n");
+			return FAILURE;
+		}
+	}
+#endif
 	return SUCCESS;
 }
 
+void init_buf_for_calc(struct pingpong_context *ctx, struct perftest_parameters *user_param, int qp_index, void *buf)
+{
+	int i;
+	uint32_t *data_u32;
+	float *data_f32;
+
+	uint64_t *data_u64;
+	double *data_f64;
+
+	static int init_val = 1;
+
+    if (user_param->dsa_type <= DSA_TYPE_UINT32_MIN) {
+        data_u32 = (uint32_t *)buf;
+        for (i = 0; i < (ctx->buff_size/4); i++) {
+            *(data_u32++) = (uint32_t)(init_val + i);
+        }
+    } else if (user_param->dsa_type <= DSA_TYPE_FLOAT32_MIN) {
+        data_f32 = (float *)buf;
+        for (i = 0; i < (ctx->buff_size/4); i++) {
+            *(data_f32++) = (float)(init_val + i);
+        }
+    } else if (user_param->dsa_type <= DSA_TYPE_UINT64_MIN) {
+        data_u64 = (uint64_t *)buf;
+        for (i = 0; i < (ctx->buff_size/8); i++) {
+            *(data_u64++) = (uint64_t)(init_val + i);
+        }
+    } else if (user_param->dsa_type <= DSA_TYPE_FLOAT64_MIN) {
+        data_f64 = (double *)buf;
+        for (i = 0; i < (ctx->buff_size/8); i++) {
+            *(data_f64++) = (double)(init_val + i);
+        }
+    }
+    init_val++;
+
+    return;
+}
 
 static int create_payload(struct perftest_parameters *user_param)
 {

@@ -116,3 +116,152 @@ void *create_and_modify_umr_qp(struct pingpong_context *ctx, struct perftest_par
 
 	return umr_qp;
 }
+
+int update_umr(struct pingpong_context *ctx, struct perftest_parameters *user_param, int qp_index)
+{
+	int res;
+
+	struct ibv_qp     *qp = ctx->umr_qp;
+	struct ibv_qp_ex *qpx = ibv_qp_to_qp_ex(qp);
+	struct mlx5dv_qp_ex *dv_qp = mlx5dv_qp_ex_from_ibv_qp_ex(qpx);
+
+	struct mlx5dv_mkey *umr_mkey = ctx->umr[qp_index];
+	if (!umr_mkey) {
+		fprintf(stderr, "Failed get umr_mkey\n");
+		return -1;
+	}
+
+	uint32_t access_flags = IB_ACCESS_FLAGS;
+	struct ibv_sge mem_reg[2];
+
+	mem_reg[0].addr = (uint64_t)ctx->buf[qp_index];
+	mem_reg[0].length = user_param->size;
+	mem_reg[0].lkey = ctx->mr[qp_index]->lkey;
+
+	mem_reg[1].addr = (uint64_t)ctx->dsa_buf[qp_index];
+	mem_reg[1].length = user_param->size;
+	mem_reg[1].lkey = ctx->dsa_mr[qp_index]->lkey;
+
+	// Create the UMR WR (work request)
+	// IBV_SEND_INLINE is a must for current mlx5dv
+	qpx->wr_flags = IBV_SEND_INLINE | IBV_SEND_SIGNALED;
+	ibv_wr_start(qpx);
+	mlx5dv_wr_mr_list(dv_qp, umr_mkey, access_flags, 2, mem_reg);
+	res = ibv_wr_complete(qpx);
+
+	struct ibv_wc wc;
+	for (;;) { // Wait for the UMR WR to complete
+		res = ibv_poll_cq(ctx->umr_cq, 1, &wc);
+		if (res < 0) {
+			fprintf(stderr, "Failed ibv_poll_cq umr_cq, res=%d\n", res);
+			return -1;
+		}
+		if (res == 1) {
+			if (wc.status != IBV_WC_SUCCESS) {
+				fprintf(stderr, "Error ibv_poll_cq umr_cq, wc.status=%d\n", wc.status);
+				return -1;
+			}
+			break;
+		}
+	}
+
+	return 0;
+}
+
+int create_umr(struct pingpong_context *ctx, struct perftest_parameters *user_param, int qp_index)
+{
+	int res;
+
+	struct ibv_qp     *qp = ctx->umr_qp;
+	struct ibv_qp_ex *qpx = ibv_qp_to_qp_ex(qp);
+	struct mlx5dv_qp_ex *dv_qp = mlx5dv_qp_ex_from_ibv_qp_ex(qpx);
+
+	struct mlx5dv_mkey_init_attr mkey_init_attr = {};
+	mkey_init_attr.create_flags = MLX5DV_MKEY_INIT_ATTR_FLAGS_INDIRECT;
+	mkey_init_attr.max_entries = 2;
+	mkey_init_attr.pd = ctx->pd;
+
+	struct mlx5dv_mkey *umr_mkey;
+	umr_mkey = mlx5dv_create_mkey(&mkey_init_attr);
+	if (!umr_mkey) {
+		fprintf(stderr, "Failed alloc umr_mkey\n");
+		return -1;
+	}
+
+	uint32_t access_flags = IB_ACCESS_FLAGS;
+	struct ibv_sge mem_reg[2];
+
+	mem_reg[0].addr = (uint64_t)ctx->buf[qp_index];
+	mem_reg[0].length = ctx->size;
+	mem_reg[0].lkey = ctx->mr[qp_index]->lkey;
+
+	mem_reg[1].addr = (uint64_t)ctx->dsa_buf[qp_index];
+	mem_reg[1].length = ctx->size;
+	mem_reg[1].lkey = ctx->dsa_mr[qp_index]->lkey;
+
+	// Create the UMR WR (work request)
+
+	// IBV_SEND_INLINE is a must for current mlx5dv
+	qpx->wr_flags = IBV_SEND_INLINE | IBV_SEND_SIGNALED;
+	ibv_wr_start(qpx);
+	mlx5dv_wr_mr_list(dv_qp, umr_mkey, access_flags, 2, mem_reg);
+	res = ibv_wr_complete(qpx);
+
+	printf("waiting for UMR fill completion on cq of qpn: %d...\n", ctx->umr_qp->qp_num);
+
+	struct ibv_wc wc;
+	for (;;) { // Wait for the UMR WR to complete
+		res = ibv_poll_cq(ctx->umr_cq, 1, &wc);
+		if (res < 0) {
+			fprintf(stderr, "Failed ibv_poll_cq umr_cq, res=%d\n", res);
+			return -1;
+		}
+		if (res == 1) {
+			if (wc.status != IBV_WC_SUCCESS) {
+				fprintf(stderr, "Error ibv_poll_cq umr_cq, wc.status=%d\n", wc.status);
+				return -1;
+			}
+			break;
+		}
+	}
+
+	printf("allocated UMR key, lkey 0x%x rkey 0x%x ...\n", umr_mkey->lkey, umr_mkey->rkey);
+	ctx->umr[qp_index] = umr_mkey;
+
+	return 0;
+}
+
+int register_hm(struct pingpong_context *ctx, struct perftest_parameters *user_param, int qp_index)
+{
+	void *buf = malloc(ctx->buff_size);
+	if (!buf) {
+		fprintf(stderr, "Failed to malloc host memory\n");
+		return -1;
+	}
+	ctx->dsa_buf[qp_index] = buf;
+
+	ctx->dsa_mr[qp_index] = ibv_reg_mr(ctx->pd, buf, ctx->buff_size, IB_ACCESS_FLAGS);
+	if (!(ctx->dsa_mr[qp_index])) {
+		fprintf(stderr, "Failed to ibv_reg_mr\n");
+		return -1;
+	}
+	printf("HM was allocated with size %d\n", user_param->buff_size);
+	return 0;
+}
+
+int malloc_dsa_buf(struct pingpong_context *ctx, struct perftest_parameters *user_param, int qp_index, int can_init_mem)
+{
+	int res;
+
+	res = register_hm(ctx, user_param, qp_index);
+	if (res) {
+		printf("Use host memory fail\n");
+		return -1;
+	}
+
+	// init dsa buf
+	extern void init_buf_for_calc(struct pingpong_context *ctx, struct perftest_parameters *user_param, int qp_index, void *buf);
+	init_buf_for_calc(ctx, user_param, qp_index, ctx->dsa_buf[qp_index]);
+
+	return 0;
+}
