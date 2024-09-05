@@ -1034,7 +1034,7 @@ int alloc_ctx(struct pingpong_context *ctx,struct perftest_parameters *user_para
 	if (user_param->use_nic_dsa) {
 		ALLOC(ctx->dsa_mr, struct ibv_mr*, user_param->num_of_qps);
 		ALLOC(ctx->dsa_buf, void *, user_param->num_of_qps);
-		ALLOC(ctx->dsa_qp, struct mlx5dv_qp*, user_param->num_of_qps);
+		ALLOC(ctx->dsa_qp, struct mlx5dv_qp_ex*, user_param->num_of_qps);
 
 		ALLOC(ctx->umr, struct mlx5dv_mkey*, user_param->num_of_qps);
 	}

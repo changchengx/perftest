@@ -198,7 +198,7 @@ struct pingpong_context {
 	#ifdef HAVE_MLX5_DSA
 	struct ibv_mr               **dsa_mr;
 	void                        **dsa_buf;
-	struct mlx5dv_qp            **dsa_qp;
+	struct mlx5dv_qp_ex         **dsa_qp;
 
 	struct mlx5dv_mkey          **umr;
 	struct ibv_qp               *umr_qp;
