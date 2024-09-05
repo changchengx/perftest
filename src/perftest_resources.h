@@ -199,6 +199,10 @@ struct pingpong_context {
 	struct ibv_mr               **dsa_mr;
 	void                        **dsa_buf;
 	struct mlx5dv_qp            **dsa_qp;
+
+	struct mlx5dv_mkey          **umr;
+	struct ibv_qp               *umr_qp;
+	struct ibv_cq               *umr_cq;
 	#endif
 
 	int (*new_post_send_work_request_func_pointer) (struct pingpong_context *ctx, int index,

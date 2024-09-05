@@ -1035,6 +1035,8 @@ int alloc_ctx(struct pingpong_context *ctx,struct perftest_parameters *user_para
 		ALLOC(ctx->dsa_mr, struct ibv_mr*, user_param->num_of_qps);
 		ALLOC(ctx->dsa_buf, void *, user_param->num_of_qps);
 		ALLOC(ctx->dsa_qp, struct mlx5dv_qp*, user_param->num_of_qps);
+
+		ALLOC(ctx->umr, struct mlx5dv_mkey*, user_param->num_of_qps);
 	}
 	#endif
 
@@ -1158,6 +1160,10 @@ void dealloc_ctx(struct pingpong_context *ctx,struct perftest_parameters *user_p
 			free(ctx->dsa_buf);
 		if (ctx->dsa_qp != NULL)
 			free(ctx->dsa_qp);
+
+		if (ctx->umr != NULL) {
+			free(ctx->umr);
+		}
 	}
 	#endif
 
@@ -1319,6 +1325,11 @@ int destroy_ctx(struct pingpong_context *ctx,
 			fprintf(stderr, "Failed to deregister dsa MR #%d\n", i+1);
 			test_result = 1;
 		}
+
+		if (user_param->use_nic_dsa && mlx5dv_destroy_mkey(ctx->umr[i])) {
+			fprintf(stderr, "Failed to deregister UMR #%d for dsa\n", i+1);
+			test_result = 1;
+		}
 		#endif
 	}
 
@@ -1357,6 +1368,18 @@ int destroy_ctx(struct pingpong_context *ctx,
 			fprintf(stderr, "Failed to deallocate TD - %s\n", strerror(errno));
 			test_result = 1;
 		}
+	}
+	#endif
+
+	#ifdef HAVE_MLX5_DSA
+	if (user_param->use_nic_dsa && ibv_destroy_qp(ctx->umr_qp)) {
+		fprintf(stderr, "Failed to destroy UMR QP - %s\n", strerror(errno));
+		test_result = 1;
+	}
+
+	if (user_param->use_nic_dsa && ibv_destroy_cq(ctx->umr_cq)) {
+		fprintf(stderr, "Failed to destroy UMR CQ - %s\n", strerror(errno));
+		test_result = 1;
 	}
 	#endif
 
