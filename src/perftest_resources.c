@@ -1029,6 +1029,15 @@ int alloc_ctx(struct pingpong_context *ctx,struct perftest_parameters *user_para
 	ALLOC(ctx->mkey, struct mlx5dv_mkey*, user_param->num_of_qps);
 	#endif
 	#endif
+
+	#ifdef HAVE_MLX5_DSA
+	if (user_param->use_nic_dsa) {
+		ALLOC(ctx->dsa_mr, struct ibv_mr*, user_param->num_of_qps);
+		ALLOC(ctx->dsa_buf, void *, user_param->num_of_qps);
+		ALLOC(ctx->dsa_qp, struct mlx5dv_qp*, user_param->num_of_qps);
+	}
+	#endif
+
 	ALLOC(ctx->mr, struct ibv_mr*, user_param->num_of_qps);
 	ALLOC(ctx->buf, void*, user_param->num_of_qps);
 
@@ -1139,6 +1148,19 @@ void dealloc_ctx(struct pingpong_context *ctx,struct perftest_parameters *user_p
 		free(ctx->mkey);
 	#endif
 	#endif
+
+
+	#ifdef HAVE_MLX5_DSA
+	if (user_param->use_nic_dsa) {
+		if (ctx->dsa_mr != NULL)
+			free(ctx->dsa_mr);
+		if (ctx->dsa_buf != NULL)
+			free(ctx->dsa_buf);
+		if (ctx->dsa_qp != NULL)
+			free(ctx->dsa_qp);
+	}
+	#endif
+
 	if (ctx->mr != NULL)
 		free(ctx->mr);
 	if (ctx->buf != NULL)
@@ -1291,6 +1313,13 @@ int destroy_ctx(struct pingpong_context *ctx,
 			fprintf(stderr, "Failed to deregister MR #%d\n", i+1);
 			test_result = 1;
 		}
+
+		#ifdef HAVE_MLX5_DSA
+		if (user_param->use_nic_dsa && ibv_dereg_mr(ctx->dsa_mr[i])) {
+			fprintf(stderr, "Failed to deregister dsa MR #%d\n", i+1);
+			test_result = 1;
+		}
+		#endif
 	}
 
 	if (ctx->send_rcredit) {
@@ -1352,6 +1381,11 @@ int destroy_ctx(struct pingpong_context *ctx,
 
 	for (i = 0; i < dereg_counter; i++) {
 		ctx->memory->free_buffer(ctx->memory, 0, ctx->buf[i], ctx->buff_size);
+		#ifdef HAVE_MLX5_DSA
+		if (user_param->use_nic_dsa) {
+			free(ctx->dsa_buf[i]);
+		}
+		#endif
 	}
 
 	free(ctx->qp);

@@ -194,6 +194,13 @@ struct pingpong_context {
 	#ifdef HAVE_MLX5DV
 	struct mlx5dv_qp_ex			**dv_qp;
 	#endif
+
+	#ifdef HAVE_MLX5_DSA
+	struct ibv_mr               **dsa_mr;
+	void                        **dsa_buf;
+	struct mlx5dv_qp            **dsa_qp;
+	#endif
+
 	int (*new_post_send_work_request_func_pointer) (struct pingpong_context *ctx, int index,
 		struct perftest_parameters *user_param);
 	#endif
