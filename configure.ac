@@ -224,6 +224,14 @@ if [test $HAVE_EX = yes]; then
 	AC_DEFINE([HAVE_EX], [1], [Have EX support])
 fi
 
+AC_TRY_LINK([#include <infiniband/verbs.h>],
+	[int x = IBV_QP_CREATE_CROSS_CHANNEL;],[HAVE_MLX5_DSA=yes], [HAVE_MLX5_DSA=no])
+AM_CONDITIONAL([HAVE_MLX5_DSA],[test "x$HAVE_MLX5_MCRW" = "xyes"])
+if [test $HAVE_MLX5_DSA = yes] && [test $HAVE_IBV_WR_API = yes]; then
+	AC_DEFINE([HAVE_MLX5_DSA], [1], [Enable NVIDIA RNIC Data Stream Accelerator])
+fi
+AM_CONDITIONAL([MLX5_DSA], [test $HAVE_MLX5_DSA = yes])
+
 AC_ARG_ENABLE([rocm],
               [AS_HELP_STRING([--enable-rocm],
                               [Enable ROCm benchmarks])
