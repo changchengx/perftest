@@ -2080,6 +2080,26 @@ int ctx_init(struct pingpong_context *ctx, struct perftest_parameters *user_para
 	}
 	#endif
 
+	#ifdef HAVE_MLX5_DSA
+	if (user_param->use_nic_dsa) {
+		ctx->umr_cq = ibv_create_cq(ctx->context, 16, NULL, NULL, 0);
+		if (ctx->umr_cq == NULL) {
+			fprintf(stderr, "Couldn't create a UMR CQ for dsa\n");
+			return FAILURE;
+		}
+
+extern void *create_and_modify_umr_qp(struct pingpong_context*, struct perftest_parameters*);
+		ctx->umr_qp = create_and_modify_umr_qp(ctx, user_param);
+		if (ctx->umr_qp == NULL) {
+			ibv_destroy_cq(ctx->umr_cq);
+			ctx->umr_cq = NULL;
+
+			fprintf(stderr, "Couldn't create UMR QP for dsa\n");
+			goto pd;
+		}
+	}
+	#endif
+
 	#ifdef HAVE_AES_XTS
 	if(user_param->aes_xts){
 		struct mlx5dv_dek_init_attr dek_attr = {};
