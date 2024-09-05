@@ -2406,6 +2406,12 @@ int create_reg_qp_main(struct pingpong_context *ctx,
 	}
 	#endif
 
+	#ifdef HAVE_MLX5_DSA
+	if (user_param->use_nic_dsa) {
+		ctx->dsa_qp[i] = mlx5dv_qp_ex_from_ibv_qp_ex(ibv_qp_to_qp_ex(ctx->qp[i]));
+	}
+	#endif
+
 	return SUCCESS;
 }
 
@@ -2515,6 +2521,14 @@ struct ibv_qp* ctx_qp_create(struct pingpong_context *ctx,
 		else if (opcode == IBV_WR_RDMA_READ)
 			attr_ex.send_ops_flags |= IBV_QP_EX_WITH_RDMA_READ;
 	}
+
+	#ifdef HAVE_MLX5_DSA
+	if (user_param->use_nic_dsa) {
+		attr_ex.send_ops_flags |= IBV_QP_EX_WITH_VECTOR_CALC;
+		attr_ex.create_flags = IBV_QP_CREATE_CROSS_CHANNEL;
+		attr_ex.comp_mask |= IBV_QP_INIT_ATTR_CREATE_FLAGS;
+	}
+	#endif
 
 	#ifdef HAVE_TD_API
 	attr_ex.pd = user_param->no_lock ? ctx->pad : ctx->pd;
