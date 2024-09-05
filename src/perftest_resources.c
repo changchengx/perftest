@@ -658,6 +658,59 @@ static int new_post_atomic_cs_sge_xrc(struct pingpong_context *ctx, int index,
 #endif
 #endif
 
+void get_optype_from_calctype(int calc_type, int *op, int *type, int *size)
+{
+	int tmp_type;
+
+	if (calc_type <= DSA_TYPE_FLOAT32_MIN) {
+		*size = IBV_CALC_OPERAND_SIZE_32_BIT;
+	} else {
+		*size = IBV_CALC_OPERAND_SIZE_64_BIT;
+	}
+
+	tmp_type = calc_type % DSA_TYPE_INT64_ADD;
+	if (tmp_type <= DSA_TYPE_INT32_MIN) {
+		*type = IBV_CALC_OPERAND_TYPE_INT;
+	} else if (tmp_type <= DSA_TYPE_UINT32_MIN) {
+		*type = IBV_CALC_OPERAND_TYPE_UINT;
+	} else if (tmp_type <= DSA_TYPE_FLOAT32_MIN) {
+		*type = IBV_CALC_OPERAND_TYPE_FLOAT;
+	}
+
+	*op = (calc_type % DSA_TYPE_UINT32_ADD) + 1;
+	return;
+}
+
+int ibv_post_send_dsa(struct pingpong_context *ctx, int index, struct perftest_parameters *user_param)
+{
+	struct ibv_send_wr *wr = &ctx->wr[index*user_param->post_list];
+	struct ibv_send_wr *bad_wr = NULL;
+
+	while (wr) {
+		int opcode = 0, operand_type = 0, operand_size = 0;
+		get_optype_from_calctype(user_param->dsa_type, &opcode, &operand_type, &operand_size);
+
+		wr->vector_calc.op = opcode;
+		wr->vector_calc.operand_type = operand_type;
+		wr->vector_calc.operand_size = operand_size;
+
+		wr->vector_calc.tag_type = 0;
+		wr->vector_calc.tag_size = 0;
+		wr->vector_calc.tag_exist = 0;
+		wr->vector_calc.little_endian = 1;
+		wr->vector_calc.chunk_size = 0; // don't know how to verify it yet
+
+		wr->vector_calc.vector_count = 2;
+		wr->send_flags |= IBV_SEND_VECTOR_CALC;
+		wr->sg_list[0].lkey = user_param->mr_per_qp? ctx->umr[index]->lkey : ctx->umr[0]->lkey;
+		wr->sg_list[0].addr = 0; // zero based umr
+
+		wr = wr->next;
+	}
+
+	return ibv_post_send(ctx->qp[index], &ctx->wr[index*user_param->post_list], &bad_wr);
+}
+
 /* post_send_method.
  *
  * Description :
@@ -676,6 +729,12 @@ static int new_post_atomic_cs_sge_xrc(struct pingpong_context *ctx, int index,
 static inline int post_send_method(struct pingpong_context *ctx, int index,
 	struct perftest_parameters *user_param)
 {
+	#ifdef HAVE_MLX5_DSA
+	if (user_param->use_nic_dsa) {
+		return ibv_post_send_dsa(ctx, index, user_param);
+	}
+	#endif
+
 	#ifdef HAVE_IBV_WR_API
 	if (!user_param->use_old_post_send)
 		return (*ctx->new_post_send_work_request_func_pointer)(ctx, index, user_param);
